@@ -1,20 +1,193 @@
 // Variables used by Scriptable.
 // These must be at the very top of the file. Do not edit.
-// icon-color: blue; icon-glyph: magic;
-// icon-color: deep-blue; icon-glyph: sun.max.fill;
-// ווידג'ט: זמני היום בלבד
+// icon-color: deep-blue; icon-glyph: magic;
+// Variables used by Scriptable.
+// These must be at the very top of the file. Do not edit.
+// icon-color: gray; icon-glyph: magic;
+
+// Variables used by Scriptable.
+// These must be at the very top of the file. Do not edit.
+// icon-color: deep-blue; icon-glyph: star-of-david;
 
 ////////////////////////////////////////////////////////////
-// הפעלה
+// וידג׳ט משולב - זמני היום + זמני שבת + לוח לימוד יומי
 ////////////////////////////////////////////////////////////
-await run();
+
+/* ===================== OFFLINE CACHE (יומי) =====================
+
+מה נשמר בקאש:
+- zmanimToday / zmanimTomorrow (Hebcal zmanim)  [oai_citation:1‡זמני היום ולוח לימוד יומי מעוד.js](sediment://file_000000004e4471f79e15a7334fd2ee2f)
+- hebrewDate / hebrewDateTomorrow (Hebcal converter)  [oai_citation:2‡זמני היום ולוח לימוד יומי מעוד.js](sediment://file_000000004e4471f79e15a7334fd2ee2f)
+- parasha (Hebcal shabbat)  [oai_citation:3‡זמני היום ולוח לימוד יומי מעוד.js](sediment://file_000000004e4471f79e15a7334fd2ee2f)
+- sefariaRes (Sefaria calendars)  [oai_citation:4‡זמני היום ולוח לימוד יומי מעוד.js](sediment://file_000000004e4471f79e15a7334fd2ee2f)
+- holidays (Hebcal events)  [oai_citation:5‡זמני היום ולוח לימוד יומי מעוד.js](sediment://file_000000004e4471f79e15a7334fd2ee2f)
+- shabbatTimes (Hebcal candles/havdalah)  [oai_citation:6‡זמני היום ולוח לימוד יומי מעוד.js](sediment://file_000000004e4471f79e15a7334fd2ee2f)
+
+התנהגות:
+- אם יש קאש להיום (לפי תאריך + מיקום מעוגל): משתמשים בו מיד (גם אם יש אינטרנט).
+- אם אין קאש להיום: מנסים למשוך מהרשת ולשמור.
+- אם אין רשת והמשיכה נכשלת: נופלים לקאש האחרון שקיים (אם יש) ומציגים ⚠️ "נתונים שמורים".
+
+=============================================================== */
+
+const CACHE_VERSION = 1;
+const CACHE_FILE = "zmanim_limud_daily_cache_v1.json";
+const CACHE_KEEP_DAYS = 5;               // כמה ימים לשמור אחורה בקובץ הקאש
+const CACHE_FALLBACK_MAX_HOURS = 72;     // עד כמה "ישן" מותר להשתמש אם אין רשת
+const LOCATION_ROUND_DECIMALS = 3;       // 3 ≈ 110m, 2 ≈ 1.1km
 
 async function run() {
   const location = await getCurrentLocation();
+
   const today = new Date();
   const tomorrow = new Date(today);
   tomorrow.setDate(today.getDate() + 1);
 
+    const todayStr = formatYMD(today);
+  const cacheKey = buildDailyCacheKey(todayStr, location.latitude, location.longitude);
+
+  // ברירת מחדל: תמיד מנסים רשת
+  let data = null;
+  let cacheMeta = null;
+  let usedCache = false;
+  let staleCache = false;
+
+  try {
+    // ניסיון רשת (המצב הרגיל)
+    data = await fetchAllData(location, today, tomorrow);
+    setCacheEntry(cacheKey, data);
+    cacheMeta = { savedAt: new Date().toISOString(), key: cacheKey, date: todayStr };
+  } catch (e) {
+    // רק אם נכשל (לרוב: אין אינטרנט) → עוברים לקאש
+    const cachedToday = getCacheEntry(cacheKey);
+
+    if (cachedToday) {
+      data = cachedToday.payload;
+      cacheMeta = { savedAt: cachedToday.savedAt, key: cacheKey, date: todayStr };
+      usedCache = true;
+    } else {
+      // אם אין קאש להיום, ננסה "האחרון שיש" בטווח שעות
+      const fallback = getNewestCacheEntryWithinHours(CACHE_FALLBACK_MAX_HOURS);
+
+      if (fallback) {
+        data = fallback.payload;
+        cacheMeta = {
+          savedAt: fallback.savedAt,
+          key: fallback.key,
+          date: extractDateFromKey(fallback.key) || ""
+        };
+        usedCache = true;
+        staleCache = true;
+      } else {
+        throw new Error("❌ אין אינטרנט ואין נתונים שמורים בקאש.");
+      }
+    }
+  }
+
+  const {
+    zmanimToday,
+    zmanimTomorrow,
+    hebrewDate,
+    hebrewDateTomorrow,
+    parasha,
+    sefariaRes,
+    holidays,
+    shabbatTimes
+  } = data;
+
+  // יצירת ווידג׳ט
+  const widget = new ListWidget();
+  widget.setPadding(16, 16, 16, 16);
+  const gradient = new LinearGradient();
+  gradient.colors = [new Color("#1A5276"), new Color("#2874A6")];
+  gradient.locations = [0, 1];
+  widget.backgroundGradient = gradient;
+
+  // כותרת עליונה - עם חגים!
+  const header = widget.addStack();
+  header.layoutHorizontally();
+  header.centerAlignContent();
+  header.addSpacer();
+
+  // בניית טקסט הכותרת
+  let headerText = hebrewDate;
+  if (parasha) headerText += " • " + parasha;
+
+  // הוספת חגים אם יש
+  if (holidays && (holidays.today.length > 0 || holidays.tomorrow.length > 0)) {
+    const holidayText = buildHolidayText(holidays);
+    if (holidayText) headerText += " • " + holidayText;
+  }
+
+  if (zmanimToday?.location?.name) headerText += " • " + zmanimToday.location.name;
+
+  addText(header, headerText, 16, "semibold", "#FFFFFF");
+  header.addSpacer();
+
+
+
+  widget.addSpacer(10);
+
+  const mainRows = widget.addStack();
+  mainRows.layoutHorizontally();
+  mainRows.spacing = 20;
+
+  // ============ זמני היום + מחר + שבת ============
+  const zmanimStack = mainRows.addStack();
+  zmanimStack.layoutVertically();
+  zmanimStack.spacing = 6;
+
+  const zHeader = zmanimStack.addStack();
+  zHeader.layoutHorizontally();
+  zHeader.centerAlignContent();
+  zHeader.spacing = 6;
+  const sunSymbol = SFSymbol.named("sun.max.fill");
+  const sunImg = zHeader.addImage(sunSymbol.image);
+  sunImg.imageSize = new Size(18, 18);
+  sunImg.tintColor = Color.white();
+  addText(zHeader, "זמני היום", 16, "bold", "#FFFFFF");
+
+  zmanimStack.addSpacer(6);
+  await buildZmanimTable(
+    zmanimStack,
+    zmanimToday,
+    zmanimTomorrow,
+    hebrewDateTomorrow,
+    shabbatTimes
+  );
+
+  mainRows.addSpacer();
+
+  // ============ לוח לימוד יומי ============
+  const limudStack = mainRows.addStack();
+  limudStack.layoutVertically();
+  limudStack.spacing = 6;
+
+  const lHeader = limudStack.addStack();
+  lHeader.layoutHorizontally();
+  lHeader.centerAlignContent();
+  lHeader.spacing = 6;
+  const bookSymbol = SFSymbol.named("book.fill");
+  const bookImg = lHeader.addImage(bookSymbol.image);
+  bookImg.imageSize = new Size(18, 18);
+  bookImg.tintColor = Color.white();
+  addText(lHeader, "לוח לימוד יומי", 16, "bold", "#FFFFFF");
+
+  limudStack.addSpacer(6);
+  await buildSefariaTable(limudStack, sefariaRes);
+
+  if (config.runsInWidget) {
+    Script.setWidget(widget);
+  } else {
+    widget.presentLarge();
+  }
+  Script.complete();
+}
+
+/* ===================== FETCH הכל (לריצה היומית) ===================== */
+
+async function fetchAllData(location, today, tomorrow) {
+  // זמני היום ומחר
   const zmanimToday = await fetchHalachicTimes(
     location.latitude,
     location.longitude,
@@ -30,8 +203,26 @@ async function run() {
   const hebrewDateTomorrow = await getHebrewDate(tomorrow);
   const parasha = await getParasha(today);
 
+  // Sefaria API
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const sefariaReq = new Request(
+    `https://www.sefaria.org/api/calendars?timezone=${encodeURIComponent(timeZone)}`
+  );
+  sefariaReq.headers = { accept: "application/json" };
+  const sefariaRes = await sefariaReq.loadJSON();
+
+  // חגים ואירועים
+  const holidays = await fetchHolidaysAndEvents(
+    location.latitude,
+    location.longitude,
+    today,
+    tomorrow
+  );
+
+  // זמני שבת (רק אם יום שישי)
+  const weekday = today.getDay(); // 5 = Friday
   let shabbatTimes = null;
-  if (today.getDay() === 5) {
+  if (weekday === 5) {
     shabbatTimes = await fetchShabbatTimes(
       location.latitude,
       location.longitude,
@@ -39,43 +230,84 @@ async function run() {
     );
   }
 
-  const widget = new ListWidget();
-  widget.setPadding(16, 16, 16, 16);
-
-  const gradient = new LinearGradient();
-  gradient.colors = [new Color("#1A5276"), new Color("#2874A6")];
-  gradient.locations = [0, 1];
-  widget.backgroundGradient = gradient;
-
-  const header = widget.addStack();
-  header.centerAlignContent();
-  header.addSpacer();
-
-  const headerText = `${hebrewDate}${
-    parasha ? " • " + parasha : ""
-  }${zmanimToday.location?.name ? " • " + zmanimToday.location.name : ""}`;
-
-  addText(header, headerText, 17, "semibold", "#FFFFFF");
-  header.addSpacer();
-  widget.addSpacer(10);
-
-  await buildZmanimTable(
-    widget,
+  return {
     zmanimToday,
     zmanimTomorrow,
+    hebrewDate,
     hebrewDateTomorrow,
+    parasha,
+    sefariaRes,
+    holidays,
     shabbatTimes
-  );
-
-  if (config.runsInWidget) Script.setWidget(widget);
-  else widget.presentLarge();
-  Script.complete();
+  };
 }
 
 ////////////////////////////////////////////////////////////
-// טבלת זמני היום
+// חגים ואירועים
 ////////////////////////////////////////////////////////////
+async function fetchHolidaysAndEvents(lat, lon, today, tomorrow) {
+  const startDate = formatYMD(today);
+  const endDate = new Date(tomorrow);
+  endDate.setDate(endDate.getDate() + 1);
+  const endDateStr = formatYMD(endDate);
 
+  const url = `https://www.hebcal.com/hebcal?cfg=json&geo=pos&latitude=${lat}&longitude=${lon}&tzid=Asia/Jerusalem&maj=on&min=on&mf=on&ss=on&c=on&start=${startDate}&end=${endDateStr}`;
+
+  try {
+    const req = new Request(url);
+    const res = await req.loadJSON();
+
+    const todayStr = formatYMD(today);
+    const tomorrowStr = formatYMD(tomorrow);
+
+    const todayEvents = [];
+    const tomorrowEvents = [];
+
+    for (const item of res.items) {
+      // מתעלמים מהדלקת נרות והבדלה (כבר מוצגים בסעיף זמני שבת)
+      if (item.category === "candles" || item.category === "havdalah") continue;
+
+      const itemDate = item.date ? item.date.split("T")[0] : null;
+
+      if (itemDate === todayStr) {
+        todayEvents.push(item);
+      } else if (itemDate === tomorrowStr) {
+        tomorrowEvents.push(item);
+      }
+    }
+
+    return { today: todayEvents, tomorrow: tomorrowEvents };
+  } catch (e) {
+    console.error("Error fetching holidays:", e);
+    return { today: [], tomorrow: [] };
+  }
+}
+
+function buildHolidayText(holidays) {
+  const parts = [];
+
+  // אירועי היום - מקסימום 2
+  if (holidays.today.length > 0) {
+    for (const event of holidays.today.slice(0, 2)) {
+      const text = event.hebrew || event.title;
+      parts.push(text);
+    }
+  }
+
+  // אירועי מחר - מקסימום 1
+  if (holidays.tomorrow.length > 0 && parts.length < 2) {
+    for (const event of holidays.tomorrow.slice(0, 1)) {
+      const text = event.hebrew || event.title;
+      parts.push("מחר: " + text);
+    }
+  }
+
+  return parts.join(" • ");
+}
+
+////////////////////////////////////////////////////////////
+// טבלת זמני היום + מחר + זמני שבת
+////////////////////////////////////////////////////////////
 async function buildZmanimTable(parent, zmanimToday, zmanimTomorrow, hebrewDateTomorrow, shabbatTimes) {
   if (!zmanimToday || !zmanimToday.times) {
     addText(parent, "לא ניתן לקבל זמנים כרגע", 14, "regular", "#FFFFFF");
@@ -101,8 +333,8 @@ async function buildZmanimTable(parent, zmanimToday, zmanimTomorrow, hebrewDateT
 
   const now = new Date();
 
-  let nextTimeIndex = -1,
-    minDiff = Infinity;
+  // מציאת הזמן הבא
+  let nextTimeIndex = -1, minDiff = Infinity;
   for (let i = 0; i < importantTimes.length; i++) {
     const t = timesToday[importantTimes[i].key];
     if (t) {
@@ -128,11 +360,8 @@ async function buildZmanimTable(parent, zmanimToday, zmanimTomorrow, hebrewDateT
   leftCol.spacing = 8;
 
   const displayLimit =
-    config.widgetFamily === "small"
-      ? 6
-      : config.widgetFamily === "medium"
-      ? 10
-      : 11;
+    config.widgetFamily === "small" ? 6 :
+    config.widgetFamily === "medium" ? 10 : 11;
 
   let currentCol = rightCol;
   const perCol = Math.ceil(Math.min(displayLimit, importantTimes.length) / 2);
@@ -172,33 +401,43 @@ async function buildZmanimTable(parent, zmanimToday, zmanimTomorrow, hebrewDateT
     );
   }
 
+  // בדיקה אם נגמר היום
   let endOfDay = null;
   if (timesToday.tzeit72min) endOfDay = new Date(timesToday.tzeit72min);
   else if (timesToday.sunset) endOfDay = new Date(timesToday.sunset);
 
-  const nowIsLate = endOfDay && now > endOfDay;
+  const isAfterEndOfDay = endOfDay && now > endOfDay;
 
-  if (nowIsLate && timesTomorrow) {
+  // מציגים את זמני מחר רק אם *לא* מדובר ביום שישי
+  const showTomorrow = isAfterEndOfDay && timesTomorrow && !shabbatTimes;
+
+  // --- חלק א: זמני מחר (רק בימי חול) ---
+  if (showTomorrow) {
     leftCol.addSpacer(6);
-    addText(leftCol, "──────", 10, "regular", "#D6EAF8");
+    const sep = leftCol.addStack();
+    addText(sep, "──────", 10, "regular", "#D6EAF8");
+
     leftCol.addSpacer(2);
 
-    addText(leftCol, `מחר • ${hebrewDateTomorrow}`, 13, "semibold", "#F7DC6F");
+    const hdr = leftCol.addStack();
+    addText(hdr, `מחר • ${hebrewDateTomorrow}`, 13, "semibold", "#F7DC6F");
 
-    const tomorrowList = [
+    leftCol.addSpacer(2);
+
+    const list = [
       { label: "עלות השחר", key: "alotHaShachar", icon: "sunrise" },
       { label: "הנץ", key: "sunrise", icon: "sun.min.fill" }
     ];
 
-    for (const info of tomorrowList) {
+    for (const info of list) {
       if (!timesTomorrow[info.key]) continue;
 
       const row = leftCol.addStack();
       row.layoutHorizontally();
       row.centerAlignContent();
 
-      const ic = SFSymbol.named(info.icon);
-      const img = row.addImage(ic.image);
+      const icon = SFSymbol.named(info.icon);
+      const img = row.addImage(icon.image);
       img.imageSize = new Size(14, 14);
       img.tintColor = new Color("#D6EAF8");
 
@@ -209,47 +448,169 @@ async function buildZmanimTable(parent, zmanimToday, zmanimTomorrow, hebrewDateT
     }
   }
 
-  if (shabbatTimes) {
+  // --- חלק ב: זמני שבת ---
+  if (shabbatTimes && (shabbatTimes.candles || shabbatTimes.havdalah)) {
     leftCol.addSpacer(8);
-    addText(leftCol, "──────", 10, "regular", "#D6EAF8");
+
+    const sep = leftCol.addStack();
+    addText(sep, "──────", 10, "regular", "#D6EAF8");
 
     leftCol.addSpacer(2);
-    addText(leftCol, "זמני שבת", 14, "bold", "#F7DC6F");
 
+    const hdr = leftCol.addStack();
+    addText(hdr, "זמני שבת", 14, "bold", "#F7DC6F");
+
+    leftCol.addSpacer(2);
+
+    // הדלקת נרות
     if (shabbatTimes.candles) {
-      const r = leftCol.addStack();
-      r.centerAlignContent();
+      const row = leftCol.addStack();
+      row.layoutHorizontally();
+      row.centerAlignContent();
+
       const ic = SFSymbol.named("flame.fill");
-      const img = r.addImage(ic.image);
+      const img = row.addImage(ic.image);
       img.imageSize = new Size(12, 12);
       img.tintColor = new Color("#F7DC6F");
 
-      r.addSpacer(4);
-      addText(r, "הדלקה", 14, "regular", "#FFFFFF");
-      r.addSpacer(4);
-      addText(r, formatTime(shabbatTimes.candles.time), 14, "bold", "#F7DC6F");
+      row.addSpacer(4);
+      addText(row, "הדלקה", 14, "regular", "#FFFFFF");
+      row.addSpacer(4);
+      addText(row, formatTime(shabbatTimes.candles.time), 14, "bold", "#F7DC6F");
     }
 
+    // יציאת שבת
     if (shabbatTimes.havdalah) {
-      const r = leftCol.addStack();
-      r.centerAlignContent();
+      const row = leftCol.addStack();
+      row.layoutHorizontally();
+      row.centerAlignContent();
+
       const ic = SFSymbol.named("moon.stars.fill");
-      const img = r.addImage(ic.image);
+      const img = row.addImage(ic.image);
       img.imageSize = new Size(12, 12);
       img.tintColor = new Color("#D6EAF8");
 
-      r.addSpacer(4);
-      addText(r, "הבדלה", 14, "regular", "#FFFFFF");
-      r.addSpacer(4);
-      addText(r, formatTime(shabbatTimes.havdalah.time), 14, "bold", "#F7DC6F");
+      row.addSpacer(4);
+      addText(row, "הבדלה", 14, "regular", "#FFFFFF");
+      row.addSpacer(4);
+      addText(row, formatTime(shabbatTimes.havdalah.time), 14, "bold", "#F7DC6F");
     }
   }
 }
 
 ////////////////////////////////////////////////////////////
-// לוגיקה חיצונית — כמו בקובץ המקורי
+// לוח לימוד יומי
+////////////////////////////////////////////////////////////
+async function buildSefariaTable(parent, sefariaRes) {
+  const items = (sefariaRes?.calendar_items || [])
+    .filter((item) => item.title && item.title.he)
+    .sort((a, b) => {
+      const pr = {
+        Tanakh: 1,
+        Talmud: 2,
+        Halakha: 3,
+        Midrash: 4,
+        Liturgy: 5,
+        Parshanut: 6,
+        Philosophy: 7,
+        Chasidut: 8,
+        Musar: 9,
+        Kabbalah: 10,
+        Responsa: 11
+      };
+      const ap = pr[a.category] || 999,
+        bp = pr[b.category] || 999;
+      return ap !== bp ? ap - bp : (a.order || 0) - (b.order || 0);
+    });
+
+  const rowsStack = parent.addStack();
+  rowsStack.layoutHorizontally();
+  rowsStack.spacing = 10;
+
+  const rightCol = rowsStack.addStack();
+  rightCol.layoutVertically();
+  rightCol.spacing = 8;
+
+  const leftCol = rowsStack.addStack();
+  leftCol.layoutVertically();
+  leftCol.spacing = 8;
+
+  const displayLimit =
+    config.widgetFamily === "small" ? 6 :
+    config.widgetFamily === "medium" ? 10 : 11;
+
+  let currentCol = rightCol;
+  const perCol = Math.ceil(Math.min(displayLimit, items.length) / 2);
+
+  for (let i = 0; i < Math.min(displayLimit, items.length); i++) {
+    if (i === perCol) currentCol = leftCol;
+    await createItemRow(currentCol, items[i]);
+  }
+}
+
+async function createItemRow(parent, item) {
+  const itemStack = parent.addStack();
+  itemStack.layoutVertically();
+  itemStack.spacing = 2;
+
+  const titleRow = itemStack.addStack();
+  titleRow.layoutHorizontally();
+  titleRow.centerAlignContent();
+
+  const iconSymbol = SFSymbol.named(getCategoryIcon(item.category));
+  const iconEl = titleRow.addImage(iconSymbol.image);
+  iconEl.imageSize = new Size(14, 14);
+  iconEl.tintColor = new Color("#D6EAF8");
+
+  titleRow.addSpacer(4);
+  addText(titleRow, item.title.he || item.title.en, 16, "semibold", "#FFFFFF");
+
+  let displayInfo = item.displayValue?.he || item.heRef || "";
+
+  if (displayInfo) {
+    const infoRow = itemStack.addStack();
+    infoRow.layoutHorizontally();
+    infoRow.addSpacer(18);
+    addText(infoRow, displayInfo, 14, "regular", "#F7DC6F");
+  }
+
+  if (item.url) itemStack.url = `https://www.sefaria.org/${item.url}`;
+}
+
+function getCategoryIcon(category) {
+  const icons = {
+    Tanakh: "book.closed.fill",
+    Talmud: "books.vertical.fill",
+    Halakha: "scale.3d",
+    Midrash: "text.book.closed.fill",
+    Kabbalah: "sparkles",
+    Liturgy: "person.2.fill",
+    Philosophy: "brain.head.profile",
+    Parshanut: "magnifyingglass",
+    Chasidut: "heart.fill",
+    Musar: "lightbulb.fill",
+    Responsa: "questionmark.circle.fill"
+  };
+  return icons[category] || "book.fill";
+}
+
+////////////////////////////////////////////////////////////
+// פונקציות עזר
 ////////////////////////////////////////////////////////////
 
+async function getCurrentLocation() {
+  try {
+    Location.setAccuracyToThreeKilometers();
+    const loc = await Location.current();
+    return { latitude: loc.latitude, longitude: loc.longitude };
+  } catch {
+    return { latitude: 31.778, longitude: 35.235 }; // ברירת מחדל: ירושלים
+  }
+}
+
+////////////////////////////////////////////////////////////
+// זמני שבת — JSON אמיתי
+////////////////////////////////////////////////////////////
 async function fetchShabbatTimes(lat, lon, date) {
   const start = formatYMD(date);
   const endDate = new Date(date);
@@ -262,31 +623,26 @@ async function fetchShabbatTimes(lat, lon, date) {
     `&start=${start}&end=${end}`;
 
   const req = new Request(url);
-  const res = await req.loadJSON();
+  return await req.loadJSON().then((res) => {
+    let candles = null;
+    let havdalah = null;
 
-  let candles = null;
-  let havdalah = null;
-
-  for (const item of res.items) {
-    if (item.category === "candles") candles = { time: item.date };
-    if (item.category === "havdalah") havdalah = { time: item.date };
-  }
-
-  return { candles, havdalah };
+    for (const item of res.items || []) {
+      if (item.category === "candles") candles = { title: item.hebrew, time: item.date };
+      if (item.category === "havdalah") havdalah = { title: item.hebrew, time: item.date };
+    }
+    return { candles, havdalah };
+  });
 }
 
+////////////////////////////////////////////////////////////
+// זמני היום (Zmanim)
+////////////////////////////////////////////////////////////
 async function fetchHalachicTimes(lat, lng, dateStr) {
-  const url = `https://www.hebcal.com/zmanim?cfg=json&latitude=${lat}&longitude=${lng}&tzid=Asia/Jerusalem&date=${dateStr}`;
+  const dateParam = `&date=${encodeURIComponent(dateStr)}`;
+  const url = `https://www.hebcal.com/zmanim?cfg=json&latitude=${lat}&longitude=${lng}&tzid=Asia/Jerusalem${dateParam}`;
   const req = new Request(url);
   return await req.loadJSON();
-}
-
-function addText(stack, text, size, weight, color) {
-  const t = stack.addText(text);
-  t.textColor = new Color(color);
-  if (weight === "bold") t.font = Font.boldSystemFont(size);
-  else if (weight === "semibold") t.font = Font.semiboldSystemFont(size);
-  else t.font = Font.systemFont(size);
 }
 
 function formatTime(str) {
@@ -298,11 +654,19 @@ function formatTime(str) {
   });
 }
 
+function addText(stack, text, size, weight, color, opacity = 1) {
+  const t = stack.addText(text);
+  t.textColor = new Color(color, opacity);
+  if (weight === "bold") t.font = Font.boldSystemFont(size);
+  else if (weight === "semibold") t.font = Font.semiboldSystemFont(size);
+  else t.font = Font.systemFont(size);
+  return t;
+}
+
 async function getHebrewDate(date) {
+  const dateStr = formatYMD(date);
   const req = new Request(
-    `https://www.hebcal.com/converter?cfg=json&date=${formatYMD(
-      date
-    )}&g2h=1`
+    `https://www.hebcal.com/converter?cfg=json&date=${dateStr}&g2h=1`
   );
   const res = await req.loadJSON();
   return res.hebrew;
@@ -312,11 +676,12 @@ async function getParasha(date) {
   const nextSat = new Date(date);
   const dow = date.getDay();
   if (dow !== 6) nextSat.setDate(date.getDate() + (6 - dow));
+  const dateStr = formatYMD(nextSat);
   const req = new Request(
-    `https://www.hebcal.com/shabbat?cfg=json&date=${formatYMD(nextSat)}`
+    `https://www.hebcal.com/shabbat?cfg=json&date=${dateStr}`
   );
   const res = await req.loadJSON();
-  const item = res.items.find((i) => i.category === "parashat");
+  const item = (res.items || []).find((i) => i.category === "parashat");
   return item ? item.hebrew : "";
 }
 
@@ -330,12 +695,97 @@ function formatYMD(date) {
   );
 }
 
-async function getCurrentLocation() {
+/* ===================== CACHE HELPERS ===================== */
+
+function roundCoord(x, decimals) {
+  const n = Number(x);
+  if (!Number.isFinite(n)) return 0;
+  return Number(n.toFixed(decimals));
+}
+
+function buildDailyCacheKey(dateYMD, lat, lon) {
+  const rLat = roundCoord(lat, LOCATION_ROUND_DECIMALS);
+  const rLon = roundCoord(lon, LOCATION_ROUND_DECIMALS);
+  return `${CACHE_VERSION}|${dateYMD}|${rLat},${rLon}`;
+}
+
+function extractDateFromKey(key) {
+  // format: "1|YYYY-MM-DD|lat,lon"
+  const parts = String(key || "").split("|");
+  return parts.length >= 3 ? parts[1] : "";
+}
+
+function getCachePath() {
+  const fm = FileManager.local();
+  return fm.joinPath(fm.documentsDirectory(), CACHE_FILE);
+}
+
+function loadCacheStore() {
+  const fm = FileManager.local();
+  const path = getCachePath();
+  if (!fm.fileExists(path)) return { version: CACHE_VERSION, entries: {} };
+
   try {
-    Location.setAccuracyToThreeKilometers();
-    const loc = await Location.current();
-    return { latitude: loc.latitude, longitude: loc.longitude };
+    const raw = fm.readString(path);
+    const obj = JSON.parse(raw);
+    if (!obj || typeof obj !== "object") return { version: CACHE_VERSION, entries: {} };
+    if (obj.version !== CACHE_VERSION) return { version: CACHE_VERSION, entries: {} };
+    if (!obj.entries || typeof obj.entries !== "object") return { version: CACHE_VERSION, entries: {} };
+    return obj;
   } catch {
-    return { latitude: 31.778, longitude: 35.235 };
+    return { version: CACHE_VERSION, entries: {} };
   }
 }
+
+function saveCacheStore(store) {
+  const fm = FileManager.local();
+  const path = getCachePath();
+  fm.writeString(path, JSON.stringify(store));
+}
+
+function pruneOldEntries(store) {
+  const now = Date.now();
+  const maxAgeMs = CACHE_KEEP_DAYS * 24 * 60 * 60 * 1000;
+  for (const [k, v] of Object.entries(store.entries || {})) {
+    const t = Date.parse(v?.savedAt || "");
+    if (!t || now - t > maxAgeMs) delete store.entries[k];
+  }
+}
+
+function getCacheEntry(key) {
+  const store = loadCacheStore();
+  const entry = store.entries[key];
+  if (!entry) return null;
+  return { key, savedAt: entry.savedAt, payload: entry.payload };
+}
+
+function setCacheEntry(key, payload) {
+  const store = loadCacheStore();
+  store.entries[key] = {
+    savedAt: new Date().toISOString(),
+    payload
+  };
+  pruneOldEntries(store);
+  saveCacheStore(store);
+}
+
+function getNewestCacheEntryWithinHours(maxHours) {
+  const store = loadCacheStore();
+  const entries = Object.entries(store.entries || {})
+    .map(([key, v]) => ({ key, savedAt: v.savedAt, payload: v.payload }))
+    .filter((e) => e.savedAt && e.payload);
+
+  if (entries.length === 0) return null;
+
+  entries.sort((a, b) => Date.parse(b.savedAt) - Date.parse(a.savedAt));
+  const newest = entries[0];
+  const ageMs = Date.now() - Date.parse(newest.savedAt);
+  const maxMs = maxHours * 60 * 60 * 1000;
+
+  return ageMs <= maxMs ? newest : null;
+}
+
+////////////////////////////////////////////////////////////
+// הפעלה
+////////////////////////////////////////////////////////////
+await run();
