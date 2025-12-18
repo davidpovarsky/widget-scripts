@@ -101,7 +101,7 @@ async function run() {
 
   } else if (family === "large") {
     // === LARGE: בחירה בין זמנים ללימוד לפי פרמטר ===
-    if (wParam.includes("limud") || wParam.includes("לימוד")) {
+    if (wParam.includes("limud") || wParam.includes("פרמטר לימוד")) {
         // הצגת לוח לימוד
         const lHeader = widget.addStack();
         lHeader.layoutHorizontally();
