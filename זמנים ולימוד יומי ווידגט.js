@@ -53,14 +53,23 @@ async function run() {
     shabbatTimes
   } = data;
 
-  // הגדרת הווידג׳ט
-  const widget = new ListWidget();
-  widget.setPadding(14, 14, 14, 14); // Padding מעט קטן יותר להתאמה לכל הגדלים
+  // הגדרת הווידג׳ט// הגדרת הווידג׳ט
+const widget = new ListWidget();
+widget.setPadding(14, 14, 14, 14);
+
+const family = String(config.widgetFamily || "");
+const isLockAccessory = family.startsWith("accessory");
+
+if (isLockAccessory) {
+  // שקוף לחלוטין
+  widget.backgroundColor = new Color("#000000", 0);
+} else {
+  // הרקע הרגיל (גרדיאנט)
   const gradient = new LinearGradient();
   gradient.colors = [new Color("#1A5276"), new Color("#2874A6")];
   gradient.locations = [0, 1];
   widget.backgroundGradient = gradient;
-
+}
   // --- חלק 1: כותרת עליונה (מוצגת בכל הגדלים) ---
   const header = widget.addStack();
   header.layoutHorizontally();
