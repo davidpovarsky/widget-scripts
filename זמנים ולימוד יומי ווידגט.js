@@ -591,14 +591,14 @@ async function createZmanRow(parent, label, timeStr, iconName, isNext) {
 
   row.addSpacer(4);
   
-  const lblTxt = addText(row, label, 14, isNext ? "bold" : "regular", isNext ? "#F39C12" : "#FFFFFF");
+  const lblTxt = addText(row, label, 18, isNext ? "bold" : "regular", isNext ? "#F39C12" : "#FFFFFF");
   // הוספת צל
   lblTxt.shadowColor = new Color("#000000", 0.2);
   lblTxt.shadowRadius = 1;
   
   row.addSpacer();
   
-  const timeTxt = addText(row, formatTime(timeStr), 14, isNext ? "bold" : "regular", isNext ? "#F39C12" : "#FFFFFF");
+  const timeTxt = addText(row, formatTime(timeStr), 18, isNext ? "bold" : "regular", isNext ? "#F39C12" : "#FFFFFF");
   // הוספת צל
   timeTxt.shadowColor = new Color("#000000", 0.2);
   timeTxt.shadowRadius = 1;
