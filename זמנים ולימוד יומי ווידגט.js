@@ -28,21 +28,42 @@ const ZMANIM_GRADIENTS = {
 
   // חצות היום / צהריים
   // background: linear-gradient(to right, #363795, #005C97)
-  chatzot: { colors: ["#363795", "#005C97"], locations: [0, 1] },
+  chatzot: {
+  colors: ["#1D4C8D", "#4D78AE", "#7EA7D4", "#6993C4"],
+  locations: [0, 0.45, 0.55, 1],
+},
 
   // מנחה (אחה"צ)
-  mincha: { colors: ["#2C3E50", "#4CA1AF"], locations: [0, 1] },
+  mincha: {
+  colors: ["#1E4A7D", "#2F6199", "#4478B5", "#5A8FCF", "#8CB8E8"],
+  locations: [0, 0.3, 0.6, 0.85, 1],
+},
+
 
   // פלג המנחה / לקראת שקיעה
   // background: linear-gradient(to right, #F56217, #0B486B)
-  plagHaMincha: { colors: ["#F56217", "#0B486B"], locations: [0, 1] },
+  plagHaMincha: {
+  colors: ["#1E4A7D", "#2A5A94", "#3D6FA8", "#5083BC", "#6290B0", "#739CAA", "#85A8B8", "#96B3C5", "#A5BED0"],
+  locations: [0, 0.2, 0.35, 0.48, 0.58, 0.68, 0.78, 0.9, 1],
+},
+
+
+
 
   // שקיעה
-  sunset: { colors: ["#642B73", "#C6426E"], locations: [0, 1] },
+  sunset: {
+  colors: ["#5B6E99", "#848BA7", "#B8ABA3"],
+  locations: [0, 0.5, 1],
+},
+
 
   // שקיעה → צאת
   // background: linear-gradient(to right, #C06C84, #6C5B7B, #355C7D)
-  tzeit: { colors: ["#C06C84", "#6C5B7B", "#355C7D"], locations: [0, 0.5, 1] },
+  tzeit: {
+  colors: ["#10162E", "#181E36", "#1C223C", "#1E253F", "#1F2642", "#292E4B", "#2C304B", "#373B58"],
+  locations: [0, 0.14, 0.28, 0.42, 0.57, 0.71, 0.85, 1],
+},
+
 
   // לילה
   night: { colors: ["#000000", "#141E30", "#243B55"], locations: [0, 0.5, 1] },
