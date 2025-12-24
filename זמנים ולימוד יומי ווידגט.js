@@ -475,6 +475,9 @@ async function buildFocusedZmanimTable(parent, zmanimToday, zmanimTomorrow, shab
 
 /* ===================== פונקציות תצוגה (Large/ExtraLarge) ===================== */
 
+
+// החלף את הפונקציה buildZmanimTable בקוד שלך עם הגרסה המתוקנת הזו:
+
 async function buildZmanimTable(parent, zmanimToday, zmanimTomorrow, hebrewDateTomorrow, shabbatTimes) {
   if (!zmanimToday || !zmanimToday.times) return;
 
@@ -502,6 +505,23 @@ async function buildZmanimTable(parent, zmanimToday, zmanimTomorrow, hebrewDateT
 
   let nextZman = timeArray.find(z => z.time > now);
 
+  // ** חישוב דינמי של התוכן הכולל **
+  let totalItems = zmanimList.length; // 11 זמנים רגילים
+  
+  // הוספת זמני מחר אם רלוונטי
+  if (!nextZman && zmanimTomorrow && hebrewDateTomorrow) {
+    totalItems += 4; // כותרת + 3 זמנים של מחר
+  }
+  
+  // הוספת זמני שבת אם קיימים
+  if (shabbatTimes) {
+    if (shabbatTimes.candles) totalItems += 1;
+    if (shabbatTimes.havdalah) totalItems += 1;
+  }
+  
+  // חלוקה לחצי - העמודה הימנית מקבלת את השארית
+  const midpoint = Math.ceil(totalItems / 2);
+
   // בניית הטבלה
   const rows = parent.addStack();
   rows.layoutHorizontally();
@@ -517,20 +537,24 @@ async function buildZmanimTable(parent, zmanimToday, zmanimTomorrow, hebrewDateT
   leftCol.layoutVertically();
   leftCol.spacing = 6;
 
-  const midpoint = Math.ceil(zmanimList.length / 2);
+  let itemCounter = 0;
 
+  // הוספת זמני היום
   for (let i = 0; i < zmanimList.length; i++) {
     const z = zmanimList[i];
     const isNext = nextZman && nextZman.key === z.key;
-    const container = i < midpoint ? rightCol : leftCol;
+    const container = itemCounter < midpoint ? rightCol : leftCol;
     
     await createZmanRow(container, z.label, times[z.key], z.icon, isNext);
+    itemCounter++;
   }
 
   // הוספת שורת מחר אם כל הזמנים של היום עברו
   if (!nextZman && zmanimTomorrow && hebrewDateTomorrow) {
-    leftCol.addSpacer(8);
-    const tmrwHeader = leftCol.addStack();
+    const container = itemCounter < midpoint ? rightCol : leftCol;
+    
+    container.addSpacer(8);
+    const tmrwHeader = container.addStack();
     tmrwHeader.layoutHorizontally();
     tmrwHeader.centerAlignContent();
     const calIcon = SFSymbol.named("calendar");
@@ -539,26 +563,31 @@ async function buildZmanimTable(parent, zmanimToday, zmanimTomorrow, hebrewDateT
     calImg.tintColor = new Color("#F39C12");
     tmrwHeader.addSpacer(4);
     const tmrwTxt = addText(tmrwHeader, hebrewDateTomorrow, 14, "semibold", "#F39C12");
-    // הוספת צל
     tmrwTxt.shadowColor = new Color("#000000", 0.2);
     tmrwTxt.shadowRadius = 1;
+    itemCounter++;
     
-    leftCol.addSpacer(4);
+    container.addSpacer(4);
     const tmrwZmanimList = [
       { label: "עלות השחר", key: "alotHaShachar", icon: "sunrise" },
       { label: "הנץ החמה", key: "sunrise", icon: "sun.min.fill" },
       { label: "סוף זמן ק״ש", key: "sofZmanShma", icon: "text.book.closed.fill" }
     ];
     for (const z of tmrwZmanimList) {
-      await createZmanRow(leftCol, z.label, zmanimTomorrow.times[z.key], z.icon, false);
+      const tContainer = itemCounter < midpoint ? rightCol : leftCol;
+      await createZmanRow(tContainer, z.label, zmanimTomorrow.times[z.key], z.icon, false);
+      itemCounter++;
     }
   }
 
-  // הוספת שורת שבת (הדלקת נרות / הבדלה)
+  // הוספת שורת שבת
   if (shabbatTimes) {
-    rightCol.addSpacer(8);
+    const container = itemCounter < midpoint ? rightCol : leftCol;
+    container.addSpacer(8);
+    
     if (shabbatTimes.candles) {
-      const row = rightCol.addStack();
+      const cContainer = itemCounter < midpoint ? rightCol : leftCol;
+      const row = cContainer.addStack();
       row.layoutHorizontally();
       row.centerAlignContent();
       const sym = SFSymbol.named("flame.fill");
@@ -567,17 +596,18 @@ async function buildZmanimTable(parent, zmanimToday, zmanimTomorrow, hebrewDateT
       img.tintColor = new Color("#D6EAF8");
       row.addSpacer(4);
       const t1 = addText(row, "הדלקת נרות", 14, "regular", "#FFFFFF");
-      // הוספת צל
       t1.shadowColor = new Color("#000000", 0.2);
       t1.shadowRadius = 1;
       row.addSpacer(4);
       const t2 = addText(row, formatTime(shabbatTimes.candles.time), 14, "bold", "#F7DC6F");
-      // הוספת צל
       t2.shadowColor = new Color("#000000", 0.2);
       t2.shadowRadius = 1;
+      itemCounter++;
     }
+    
     if (shabbatTimes.havdalah) {
-      const row = rightCol.addStack();
+      const hContainer = itemCounter < midpoint ? rightCol : leftCol;
+      const row = hContainer.addStack();
       row.layoutHorizontally();
       row.centerAlignContent();
       const sym = SFSymbol.named("moon.stars.fill");
@@ -586,17 +616,18 @@ async function buildZmanimTable(parent, zmanimToday, zmanimTomorrow, hebrewDateT
       img.tintColor = new Color("#D6EAF8");
       row.addSpacer(4);
       const t1 = addText(row, "הבדלה", 14, "regular", "#FFFFFF");
-      // הוספת צל
       t1.shadowColor = new Color("#000000", 0.2);
       t1.shadowRadius = 1;
       row.addSpacer(4);
       const t2 = addText(row, formatTime(shabbatTimes.havdalah.time), 14, "bold", "#F7DC6F");
-      // הוספת צל
       t2.shadowColor = new Color("#000000", 0.2);
       t2.shadowRadius = 1;
+      itemCounter++;
     }
   }
 }
+
+
 
 async function createZmanRow(parent, label, timeStr, iconName, isNext) {
   if (!timeStr) return;
