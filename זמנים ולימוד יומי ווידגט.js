@@ -70,7 +70,11 @@ chatzot: {
 
 
   // לילה
-  night: { colors: ["#000000", "#141E30", "#243B55"], locations: [0, 0.5, 1] },
+  night: {
+  colors: ["#11172F", "#151F38", "#1C233D", "#252C48", "#2D314E", "#303751", "#3B3F5A"],
+  locations: [0, 0.16, 0.33, 0.5, 0.66, 0.83, 1],
+},
+
 };
 
 const CACHE_VERSION = 1;
@@ -120,53 +124,73 @@ async function run() {
   } = data;
 
   // הגדרת הווידג׳ט
-  const widget = new ListWidget();
+
+
+  // בדיקה אם צריך רקע שקוף
+        const widget = new ListWidget();
   widget.setPadding(14, 14, 14, 14);
 
-  // === חישוב הגרדיאנט הדינמי ===
-  const activeGradient = getZmanimGradient(zmanimToday);
+  // קודם כל מגדירים את wParam
+  const wParam = (args.widgetParameter || "").toLowerCase();
   
-  // יצירת אובייקט הגרדיאנט של Scriptable
-  const bgGradient = new LinearGradient();
-  bgGradient.colors = activeGradient.colors.map(c => new Color(c));
-  bgGradient.locations = activeGradient.locations;
-  widget.backgroundGradient = bgGradient;
+  // ואז משתמשים בו
+  const isAccessory = ["accessoryRectangular", "accessoryInline", "accessoryCircular"].includes(config.widgetFamily);
+  const forceTransparent = wParam.includes("שקוף") || wParam.includes("shakuf");
+  const useTransparent = isAccessory || forceTransparent;
 
-  // --- חלק 1: כותרת עליונה (מוצגת בכל הגדלים) ---
-  const header = widget.addStack();
-  header.layoutHorizontally();
-  header.centerAlignContent();
-  header.addSpacer();
-
-  let headerText = hebrewDate;
-  // ב-Small נקצר את הכותרת כדי שלא תתפוס את כל המקום
-  if (config.widgetFamily !== "small") {
-      if (parasha) headerText += " • " + parasha;
-      if (holidays && (holidays.today.length > 0 || holidays.tomorrow.length > 0)) {
-        const holidayText = buildHolidayText(holidays);
-        if (holidayText) headerText += " • " + holidayText;
-      }
-      if (zmanimToday?.location?.name) headerText += " • " + zmanimToday.location.name;
+  if (useTransparent) {
+    // רקע שקוף
+    widget.backgroundColor = new Color("#000000", 0);
   } else {
-      // ב-Small נציג רק תאריך ופרשה (בלי חגים ומיקום כדי לחסוך מקום)
-      if (parasha) headerText += "\n" + parasha;
+    // === חישוב הגרדיאנט הדינמי ===
+    const activeGradient = getZmanimGradient(zmanimToday);
+    
+    const bgGradient = new LinearGradient();
+    bgGradient.colors = activeGradient.colors.map(c => new Color(c));
+    bgGradient.locations = activeGradient.locations;
+    widget.backgroundGradient = bgGradient;
   }
 
-  const headerLabel = addText(header, headerText, config.widgetFamily === "small" ? 13 : 14, "semibold", "#FFFFFF");
-  // הוספת צל לכותרת
-  headerLabel.shadowColor = new Color("#000000", 0.4);
-  headerLabel.shadowRadius = 2;
-  
-  if (config.widgetFamily === "small") headerLabel.centerAlignText();
-  
-  header.addSpacer();
-  widget.addSpacer(config.widgetFamily === "small" ? 4 : 10);
+
+
+  // --- חלק 1: כותרת עליונה (מוצגת בכל הגדלים) ---
+    // --- חלק 1: כותרת עליונה (מוצגת בכל הגדלים חוץ מ-accessory) ---
+  if (!isAccessory) {
+    const header = widget.addStack();
+    header.layoutHorizontally();
+    header.centerAlignContent();
+    header.addSpacer();
+
+    let headerText = hebrewDate;
+    // ב-Small נקצר את הכותרת כדי שלא תתפוס את כל המקום
+    if (config.widgetFamily !== "small") {
+        if (parasha) headerText += " • " + parasha;
+        if (holidays && (holidays.today.length > 0 || holidays.tomorrow.length > 0)) {
+          const holidayText = buildHolidayText(holidays);
+          if (holidayText) headerText += " • " + holidayText;
+        }
+        if (zmanimToday?.location?.name) headerText += " • " + zmanimToday.location.name;
+    } else {
+        // ב-Small נציג רק תאריך ופרשה (בלי חגים ומיקום כדי לחסוך מקום)
+        if (parasha) headerText += "\n" + parasha;
+    }
+
+    const headerLabel = addText(header, headerText, config.widgetFamily === "small" ? 13 : 14, "semibold", "#FFFFFF");
+    headerLabel.shadowColor = new Color("#000000", 0.4);
+    headerLabel.shadowRadius = 2;
+    
+    if (config.widgetFamily === "small") headerLabel.centerAlignText();
+    
+    header.addSpacer();
+    widget.addSpacer(config.widgetFamily === "small" ? 4 : 10);
+  }
+  // סוגר את ה-if - עכשיו הכותרת לא תוצג ב-accessory
 
   // --- חלק 2: תוכן לפי גודל הווידג׳ט ---
   const family = config.widgetFamily || "large"; // ברירת מחדל לדיבאג
-  const wParam = (args.widgetParameter || "").toLowerCase();
 
-  if (family === "small") {
+
+if (family === "small" || "isAccessory") {
     // === SMALL: הצגת הזמן הבא בלבד ===
     await buildFocusedZmanimTable(widget, zmanimToday, zmanimTomorrow, shabbatTimes, "single");
 
@@ -397,10 +421,38 @@ async function buildFocusedZmanimTable(parent, zmanimToday, zmanimTomorrow, shab
     if (nextIndex === -1) nextIndex = flatTimes.length - 1; // אם כל הזמנים עברו, מציג את האחרון
 
     // === SINGLE MODE: הצגת הזמן הבא בלבד (למכשיר קטן) ===
-    if (mode === "single") {
-        const item = flatTimes[nextIndex];
-        if (!item) return;
+if (mode === "single") {
+    const item = flatTimes[nextIndex];
+    if (!item) return;
+    
+// בדיקה אם זה accessoryInline או accessoryRectangular (פריסה אופקית)
+const isInline = config.widgetFamily === "accessoryInline" || config.widgetFamily === "accessoryRectangular";
+
+    
+    if (isInline) {
+        // פריסה אופקית עבור accessoryInline
+        const mainStack = parent.addStack();
+        mainStack.layoutHorizontally();
+        mainStack.centerAlignContent();
         
+        const iconSymbol = SFSymbol.named(item.icon);
+        const iconImg = mainStack.addImage(iconSymbol.image);
+        iconImg.imageSize = new Size(20, 20);
+        iconImg.tintColor = new Color("#F39C12");
+        
+        mainStack.addSpacer(6);
+        
+        const textStack = mainStack.addStack();
+        textStack.layoutVertically();
+        textStack.centerAlignContent();
+        
+        const lbl = addText(textStack, item.label, 14, "semibold", "#FFFFFF");
+        lbl.lineLimit = 1;
+        
+        const timeLbl = addText(textStack, formatTime(item.time), 18, "bold", "#F39C12");
+        
+    } else {
+        // פריסה אנכית עבור small ו-accessoryCircular
         parent.addSpacer();
         const stack = parent.addStack();
         stack.layoutVertically();
@@ -415,20 +467,20 @@ async function buildFocusedZmanimTable(parent, zmanimToday, zmanimTomorrow, shab
         stack.addSpacer(8);
         const lbl = addText(stack, item.label, 16, "bold", "#FFFFFF");
         lbl.centerAlignText();
-        // הוספת צל
         lbl.shadowColor = new Color("#000000", 0.3);
         lbl.shadowRadius = 2;
         
         stack.addSpacer(4);
         const timeLbl = addText(stack, formatTime(item.time), 26, "regular", "#F39C12");
         timeLbl.centerAlignText();
-        // הוספת צל
         timeLbl.shadowColor = new Color("#000000", 0.3);
         timeLbl.shadowRadius = 2;
         
         parent.addSpacer();
-        return;
     }
+    return;
+}
+
 
     // === LIST MODE: הצגת רשימה ממוקדת (עכשיו +- 2) למכשיר בינוני ===
     if (mode === "list") {
