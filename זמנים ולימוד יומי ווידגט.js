@@ -587,7 +587,31 @@ async function buildZmanimTable(parent, zmanimToday, zmanimTomorrow, hebrewDateT
   // הוספת שורת שבת
   if (shabbatTimes) {
     const container = itemCounter < midpoint ? rightCol : leftCol;
-    container.addSpacer(8);
+// הוספת שורת שבת
+if (shabbatTimes) {
+  const container = itemCounter < midpoint ? rightCol : leftCol;
+  
+  // ✅ הוסף את זה - כותרת "זמני שבת"
+  container.addSpacer(8);
+  const shabbatHeader = container.addStack();
+  shabbatHeader.layoutHorizontally();
+  shabbatHeader.centerAlignContent();
+  const shabbatIcon = SFSymbol.named("star.fill");
+  const shabbatImg = shabbatHeader.addImage(shabbatIcon.image);
+  shabbatImg.imageSize = new Size(14, 14);
+  shabbatImg.tintColor = new Color("#F39C12");
+  shabbatHeader.addSpacer(4);
+  const shabbatTxt = addText(shabbatHeader, "זמני שבת", 14, "semibold", "#F39C12");
+  shabbatTxt.shadowColor = new Color("#000000", 0.2);
+  shabbatTxt.shadowRadius = 1;
+  itemCounter++;
+  container.addSpacer(4);
+  // ✅ עד כאן
+  
+  if (shabbatTimes.candles) {
+    const cContainer = itemCounter < midpoint ? rightCol : leftCol;
+
+
     
     if (shabbatTimes.candles) {
       const cContainer = itemCounter < midpoint ? rightCol : leftCol;
