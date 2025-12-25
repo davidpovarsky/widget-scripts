@@ -71,6 +71,7 @@ chatzot: {
   tzeit: {
   colors: ["#11172F", "#151F38", "#1C233D", "#252C48", "#2D314E", "#303751", "#3B3F5A"],
   locations: [0, 0.16, 0.33, 0.5, 0.66, 0.83, 1],
+  },
   // לילה
   night: {
   colors: ["#11172F", "#151F38", "#1C233D", "#252C48", "#2D314E", "#303751", "#3B3F5A"],
@@ -192,13 +193,14 @@ async function run() {
   const family = config.widgetFamily || "large"; // ברירת מחדל לדיבאג
 
 
-if (family === "small" || "isAccessory") {
-    // === SMALL: הצגת הזמן הבא בלבד ===
+if (isAccessory) {
+    // === ACCESSORY: הצגת הזמן הבא בלבד (ללא כותרת) ===
     await buildFocusedZmanimTable(widget, zmanimToday, zmanimTomorrow, shabbatTimes, "single");
 
-  } else if (family === "medium") {
-    // === MEDIUM: הצגת רשימה ממוקדת (עכשיו +- 2) ===
-    await buildFocusedZmanimTable(widget, zmanimToday, zmanimTomorrow, shabbatTimes, "list");
+  } else if (family === "small") {
+    // === SMALL: הצגת הזמן הבא בלבד (עם כותרת) ===
+    await buildFocusedZmanimTable(widget, zmanimToday, zmanimTomorrow, shabbatTimes, "single");
+
 
   } else if (family === "large") {
     // === LARGE: בחירה בין זמנים ללימוד לפי פרמטר ===
