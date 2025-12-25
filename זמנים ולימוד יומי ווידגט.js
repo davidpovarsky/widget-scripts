@@ -39,8 +39,8 @@ chatzot: {
 
   // מנחה (אחה"צ)
   mincha: {
-  colors: ["#1E4A7D", "#2F6199", "#4478B5", "#5A8FCF", "#8CB8E8"],
-  locations: [0, 0.3, 0.6, 0.85, 1],
+  colors: ["#094685", "#154F8C", "#205A97", "#29659F", "#3371AA", "#3C78B4", "#437FBB", "#4A86C2"],
+  locations: [0, 0.14, 0.28, 0.42, 0.57, 0.71, 0.85, 1],
 },
 
 
@@ -584,14 +584,11 @@ async function buildZmanimTable(parent, zmanimToday, zmanimTomorrow, hebrewDateT
     }
   }
 
-  // הוספת שורת שבת
-  if (shabbatTimes) {
-    const container = itemCounter < midpoint ? rightCol : leftCol;
 // הוספת שורת שבת
 if (shabbatTimes) {
   const container = itemCounter < midpoint ? rightCol : leftCol;
   
-  // ✅ הוסף את זה - כותרת "זמני שבת"
+  // כותרת "זמני שבת"
   container.addSpacer(8);
   const shabbatHeader = container.addStack();
   shabbatHeader.layoutHorizontally();
@@ -606,56 +603,50 @@ if (shabbatTimes) {
   shabbatTxt.shadowRadius = 1;
   itemCounter++;
   container.addSpacer(4);
-  // ✅ עד כאן
   
   if (shabbatTimes.candles) {
     const cContainer = itemCounter < midpoint ? rightCol : leftCol;
-
-
-    
-    if (shabbatTimes.candles) {
-      const cContainer = itemCounter < midpoint ? rightCol : leftCol;
-      const row = cContainer.addStack();
-      row.layoutHorizontally();
-      row.centerAlignContent();
-      const sym = SFSymbol.named("flame.fill");
-      const img = row.addImage(sym.image);
-      img.imageSize = new Size(12, 12);
-      img.tintColor = new Color("#D6EAF8");
-      row.addSpacer(4);
-      const t1 = addText(row, "הדלקת נרות", 14, "regular", "#FFFFFF");
-      t1.shadowColor = new Color("#000000", 0.2);
-      t1.shadowRadius = 1;
-      row.addSpacer(4);
-      const t2 = addText(row, formatTime(shabbatTimes.candles.time), 14, "bold", "#F7DC6F");
-      t2.shadowColor = new Color("#000000", 0.2);
-      t2.shadowRadius = 1;
-      itemCounter++;
-    }
-    
-    if (shabbatTimes.havdalah) {
-      const hContainer = itemCounter < midpoint ? rightCol : leftCol;
-      const row = hContainer.addStack();
-      row.layoutHorizontally();
-      row.centerAlignContent();
-      const sym = SFSymbol.named("moon.stars.fill");
-      const img = row.addImage(sym.image);
-      img.imageSize = new Size(12, 12);
-      img.tintColor = new Color("#D6EAF8");
-      row.addSpacer(4);
-      const t1 = addText(row, "הבדלה", 14, "regular", "#FFFFFF");
-      t1.shadowColor = new Color("#000000", 0.2);
-      t1.shadowRadius = 1;
-      row.addSpacer(4);
-      const t2 = addText(row, formatTime(shabbatTimes.havdalah.time), 14, "bold", "#F7DC6F");
-      t2.shadowColor = new Color("#000000", 0.2);
-      t2.shadowRadius = 1;
-      itemCounter++;
-    }
+    const row = cContainer.addStack();
+    row.layoutHorizontally();
+    row.centerAlignContent();
+    const sym = SFSymbol.named("flame.fill");
+    const img = row.addImage(sym.image);
+    img.imageSize = new Size(12, 12);
+    img.tintColor = new Color("#D6EAF8");
+    row.addSpacer(4);
+    const t1 = addText(row, "הדלקת נרות", 14, "regular", "#FFFFFF");
+    t1.shadowColor = new Color("#000000", 0.2);
+    t1.shadowRadius = 1;
+    row.addSpacer(4);
+    const t2 = addText(row, formatTime(shabbatTimes.candles.time), 14, "bold", "#F7DC6F");
+    t2.shadowColor = new Color("#000000", 0.2);
+    t2.shadowRadius = 1;
+    itemCounter++;
+  }
+  
+  if (shabbatTimes.havdalah) {
+    const hContainer = itemCounter < midpoint ? rightCol : leftCol;
+    const row = hContainer.addStack();
+    row.layoutHorizontally();
+    row.centerAlignContent();
+    const sym = SFSymbol.named("moon.stars.fill");
+    const img = row.addImage(sym.image);
+    img.imageSize = new Size(12, 12);
+    img.tintColor = new Color("#D6EAF8");
+    row.addSpacer(4);
+    const t1 = addText(row, "הבדלה", 14, "regular", "#FFFFFF");
+    t1.shadowColor = new Color("#000000", 0.2);
+    t1.shadowRadius = 1;
+    row.addSpacer(4);
+    const t2 = addText(row, formatTime(shabbatTimes.havdalah.time), 14, "bold", "#F7DC6F");
+    t2.shadowColor = new Color("#000000", 0.2);
+    t2.shadowRadius = 1;
+        itemCounter++;
   }
 }
+} // ⬅️ זו הסוגריים החסרה!
 
-
+    
 
 async function createZmanRow(parent, label, timeStr, iconName, isNext) {
   if (!timeStr) return;
