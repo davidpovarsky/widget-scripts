@@ -644,7 +644,7 @@ if (shabbatTimes) {
         itemCounter++;
   }
 }
-} // ⬅️ זו הסוגריים החסרה!
+}
 
     
 
