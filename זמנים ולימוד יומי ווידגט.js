@@ -24,7 +24,11 @@ const ZMANIM_GRADIENTS = {
 
   // בוקר
   // background: linear-gradient(to right, #2B32B2, #1488CC)
-  morning: { colors: ["#2B32B2", "#1488CC"], locations: [0, 1] },
+  morning: {
+  colors: ["#094685", "#154F8C", "#205A97", "#29659F", "#3371AA", "#3C78B4", "#437FBB", "#4A86C2"],
+  locations: [0, 0.14, 0.28, 0.42, 0.57, 0.71, 0.85, 1],
+},
+
 
   // חצות היום / צהריים
   // background: linear-gradient(to right, #363795, #005C97)
