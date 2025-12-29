@@ -46,14 +46,8 @@ async function readJsonFile(path, fallback) {
   }
 }
 
-/**
- * טוען תמונה מקומית מתיקיית data לפי שם בסיס:
- * - "אוטובוס קרוב" או "אוטובוס קרוב.png"/jpg/webp
- * - וגם תומך בשמות עם תווי RTL נסתרים (stripBidi)
- */
 async function loadLocalImageByBaseName(dir, baseName) {
   try {
-    // קודם נסה התאמה “חכמה” לפי תצוגה (עם/בלי סיומת)
     const list = fm.listContents(dir);
     const baseClean = stripBidi(baseName);
 
@@ -67,7 +61,6 @@ async function loadLocalImageByBaseName(dir, baseName) {
       }
     }
 
-    // fallback ניסיונות סטנדרטיים
     const exts = ["png", "jpg", "jpeg", "webp"];
     for (const ext of exts) {
       const p = fm.joinPath(dir, `${baseName}.${ext}`);
@@ -100,7 +93,6 @@ async function getCurrentLocationSafe() {
   }
 }
 
-// חישוב מרחק מקורב ומהיר (במטרים)
 function approxDistanceMeters(lat1, lon1, lat2, lon2) {
   const rad = Math.PI / 180;
   const x = (lon2 - lon1) * rad * Math.cos(((lat1 + lat2) / 2) * rad);
@@ -119,7 +111,6 @@ function normalizeStopItem(s) {
   const name = String(s.stopName ?? s.name ?? "");
   const code = String(s.stopCode ?? s.code ?? "");
 
-  // תאימות: אצלנו osmId = GTFS stop id, אבל אם כבר נשמר בעבר משהו אחר—לא יפריע
   const osmId = String(s.osmId ?? s.osmID ?? s.osm_id ?? "");
   const osmNodeId = String(s.osmNodeId ?? s.osm_node_id ?? "");
 
@@ -132,16 +123,6 @@ function pickStopNameFromTags(tags) {
 
 /* ===================== NEARBY STOPS VIA OVERPASS ===================== */
 
-/**
- * Overpass:
- * - name
- * - code = tags.ref
- * - osmId = tags["gtfs:stop_id:IL-MO"]  ✅ זה ה-ID שאתה צריך
- * - osmNodeId = el.id (OSM node id) לדיבאג
- *
- * stopId נשמר לצורך תאימות קישורים:
- * נעדיף code, אם אין—ניפול ל-gtfs, ואם אין—OSM node id
- */
 async function getNearbyStopsFromOverpass(maxResults, excludeIdsSet) {
   const loc = await getCurrentLocationSafe();
   if (!loc) return [];
@@ -165,7 +146,6 @@ out body;`;
   try {
     data = await new Request(url).loadJSON();
   } catch (e) {
-    // אם חזר HTML/טקסט (עומס/שגיאה)
     try {
       const txt = await new Request(url).loadString();
       console.error(
@@ -205,8 +185,8 @@ out body;`;
         stopId,
         name,
         code,
-        osmId: gtfsId,   // ✅ GTFS stop id
-        osmNodeId,       // OSM node id
+        osmId: gtfsId,
+        osmNodeId,
         distance: Math.round(d),
       });
     } catch {}
@@ -226,24 +206,19 @@ function busNearbyRouteUrl(routeId) {
   return `https://busnearby.co.il/shareRoute/${routeId}`;
 }
 
-/**
- * מריץ Scriptable script עם query parameters.
- * אנחנו משתמשים ב-open.scriptable.app כדי לפתוח את Scriptable בצורה יציבה.
- */
+// ✅ הרצה ישירה בלי Safari
 function runScriptUrl(scriptName, paramsObj) {
-  // הרצה ישירה בלי Safari:
   const base = `scriptable:///run/${encodeURIComponent(scriptName)}`;
-
   const qs = Object.entries(paramsObj || {})
     .filter(([_, v]) => v !== undefined && v !== null && String(v).length > 0)
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
     .join("&");
-
   return qs ? `${base}?${qs}` : base;
 }
 
 /* ===================== WIDGET UI HELPERS ===================== */
 
+// ✅ זה האייקון המקורי (SFSymbol בתוך ריבוע צבעוני)
 function createIconWithSymbol(parent, symbolName, bgColor) {
   const iconStack = parent.addStack();
   iconStack.size = new Size(34, 34);
@@ -259,25 +234,26 @@ function createIconWithSymbol(parent, symbolName, bgColor) {
   return iconStack;
 }
 
-function addTwoIconsStack(parentRow, busIconImage, busUrl, stationEmojiUrl) {
+// ✅ שני אייקונים בצד השני של השורה (ימין): אוטובוס קרוב + 🚏
+function addActionIconsRight(parentRow, busIconImage, busUrl, stationUrl) {
   const icons = parentRow.addStack();
   icons.layoutHorizontally();
   icons.centerAlignContent();
   icons.spacing = 8;
 
-  // 1) "אוטובוס קרוב" - תמונה מקומית (או fallback SFSymbol)
+  // 1) "אוטובוס קרוב" - תמונה מה-data (או fallback)
   const busImg = icons.addImage(busIconImage ?? SFSymbol.named("bus.fill").image);
-  busImg.imageSize = new Size(26, 26);
+  busImg.imageSize = new Size(24, 24);
   busImg.url = busUrl;
 
-  // 2) "תחנה" - אימוג׳י 🚏 (לחיץ להרצת סקריפט)
+  // 2) "תחנה" - אימוג׳י
   const stationStack = icons.addStack();
-  stationStack.size = new Size(26, 26);
+  stationStack.size = new Size(24, 24);
   stationStack.centerAlignContent();
-  stationStack.url = stationEmojiUrl || null;
+  stationStack.url = stationUrl || null;
 
   const t = stationStack.addText("🚏");
-  t.font = Font.systemFont(20);
+  t.font = Font.systemFont(18);
 
   return icons;
 }
@@ -292,7 +268,7 @@ if (!data.lines) data.lines = { favorites: [] };
 if (!Array.isArray(data.stops.favorites)) data.stops.favorites = [];
 if (!Array.isArray(data.lines.favorites)) data.lines.favorites = [];
 
-// טען תמונת "אוטובוס קרוב" מה-data
+// תמונת "אוטובוס קרוב"
 const busNearbyImg = await loadLocalImageByBaseName(dataDir, "אוטובוס קרוב");
 
 // יצירת הווידג'ט
@@ -315,10 +291,9 @@ try {
   widget.backgroundColor = new Color("#ECF0F1");
 }
 
-// padding
 widget.setPadding(18, 18, 18, 18);
 
-// קונטיינר מרכזי עם רקע חצי שקוף
+// קונטיינר מרכזי
 const containerStack = widget.addStack();
 containerStack.layoutVertically();
 containerStack.backgroundColor = new Color("#FFFFFF", 0.85);
@@ -346,7 +321,7 @@ const favoriteStopsRaw = Array.isArray(data?.stops?.favorites) ? data.stops.favo
 const stopsToShow = [];
 const usedStopIds = new Set();
 
-// 1) מועדפים קודמים בראש
+// 1) מועדפים
 for (const fav of favoriteStopsRaw) {
   const item = normalizeStopItem(fav);
   if (!item) continue;
@@ -356,7 +331,7 @@ for (const fav of favoriteStopsRaw) {
   if (stopsToShow.length >= MAX_STOPS_TO_SHOW) break;
 }
 
-// 2) השלמה עם תחנות קרובות מה-Overpass
+// 2) השלמה מ-Overpass
 if (stopsToShow.length < MAX_STOPS_TO_SHOW) {
   const nearby = await getNearbyStopsFromOverpass(
     MAX_STOPS_TO_SHOW - stopsToShow.length,
@@ -393,22 +368,13 @@ if (stopsToShow.length > 0) {
     rowStack.layoutHorizontally();
     rowStack.centerAlignContent();
     rowStack.spacing = 12;
+    rowStack.url = null; // כדי שהאייקונים יהיו לחיצים בנפרד
 
-    // חשוב: לא לתת url לשורה כולה, כדי לאפשר לחיצות שונות לכל אייקון
-    rowStack.url = null;
+    // ✅ (1) האייקון המקורי בצד שמאל (ריבוע צבעוני עם bus.fill)
+    createIconWithSymbol(rowStack, "bus.fill", stopColors[i] || "#95A5A6");
 
-    // ✅ שני אייקונים: (1) busnearby, (2) emoji שמריץ Scriptable
+    // ✅ (2) טקסט באמצע - לחיץ ל-BusNearby כמו קודם
     const busUrl = busNearbyStopUrl(stop.stopId);
-
-    // בפרמטר אתה ביקשת code (לא id)
-    const stopCodeToSend = (stop.code && String(stop.code).trim()) ? String(stop.code).trim() : "";
-    const stationUrl = stopCodeToSend
-      ? runScriptUrl("תחנות קרובות זמן אמת", { stopCodes: stopCodeToSend })
-      : null;
-
-    addTwoIconsStack(rowStack, busNearbyImg, busUrl, stationUrl);
-
-    // טקסט (נשאר “כמו היום”: לחיצה על הטקסט תפתח busnearby)
     const textStack = rowStack.addStack();
     textStack.layoutVertically();
     textStack.spacing = 2;
@@ -419,7 +385,7 @@ if (stopsToShow.length > 0) {
     nameText.textColor = new Color("#2C3E50");
     nameText.lineLimit = 1;
 
-    // שורה שנייה: קוד + GTFS ID
+    const stopCodeToSend = (stop.code && String(stop.code).trim()) ? String(stop.code).trim() : "";
     const codeLine =
       `קוד: ${stopCodeToSend || "-"}` +
       ((stop.osmId && String(stop.osmId).trim()) ? `  •  GTFS: ${String(stop.osmId).trim()}` : "");
@@ -429,7 +395,15 @@ if (stopsToShow.length > 0) {
     codeText.textColor = new Color("#7F8C8D");
     codeText.lineLimit = 1;
 
+    // ✅ דוחפים את האייקונים החדשים לצד השני (ימין)
     rowStack.addSpacer();
+
+    const stationUrl = stopCodeToSend
+      ? runScriptUrl("תחנות קרובות זמן אמת", { stopCodes: stopCodeToSend })
+      : null;
+
+    addActionIconsRight(rowStack, busNearbyImg, busUrl, stationUrl);
+
     containerStack.addSpacer(10);
   }
 
@@ -465,25 +439,14 @@ if (data.lines.favorites.length > 0) {
     rowStack.layoutHorizontally();
     rowStack.centerAlignContent();
     rowStack.spacing = 12;
-
     rowStack.url = null;
 
+    // ✅ (1) האייקון המקורי של קו בצד שמאל (כמו היה: bus)
+    createIconWithSymbol(rowStack, "bus", i === 0 ? "#3498DB" : "#9B59B6");
+
+    // ✅ (2) טקסט לחיץ ל-busnearby כמו קודם
     const busUrl = busNearbyRouteUrl(line.routeId);
 
-    // ✅ לפי בקשתך: בשורה של קווים שולחים את ה-id של הקו
-    // (לא נורא אם הסקריפט עדיין לא תומך – אתה תוסיף בהמשך)
-    const routeIdToSend = String(line.routeId || "").trim();
-    const stationUrl = routeIdToSend
-      ? runScriptUrl("תחנות קרובות זמן אמת", {
-          // שולח גם stopCodes וגם routeId כדי שיהיה לך קל לתמוך בהמשך
-          stopCodes: routeIdToSend,
-          routeId: routeIdToSend,
-        })
-      : null;
-
-    addTwoIconsStack(rowStack, busNearbyImg, busUrl, stationUrl);
-
-    // טקסט (לחיץ ל-busnearby כמו היום)
     const textStack = rowStack.addStack();
     textStack.layoutVertically();
     textStack.spacing = 2;
@@ -498,7 +461,19 @@ if (data.lines.favorites.length > 0) {
     destText.textColor = new Color("#7F8C8D");
     destText.lineLimit = 1;
 
+    // ✅ (3) אייקונים חדשים בצד ימין
     rowStack.addSpacer();
+
+    const routeIdToSend = String(line.routeId || "").trim();
+    const stationUrl = routeIdToSend
+      ? runScriptUrl("תחנות קרובות זמן אמת", {
+          stopCodes: routeIdToSend, // זמני עד שתוסיף תמיכה
+          routeId: routeIdToSend,
+        })
+      : null;
+
+    addActionIconsRight(rowStack, busNearbyImg, busUrl, stationUrl);
+
     containerStack.addSpacer(10);
   }
 }
