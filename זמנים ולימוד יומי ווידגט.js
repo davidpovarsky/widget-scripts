@@ -749,11 +749,14 @@ if (hasFastSpecial || hasShabbatSpecial) {
   }
 
   // ואז שבת (אם קיים)
-  if (hasShabbatSpecial) {
+    if (hasShabbatSpecial) {
     addSpecialRow("הדלקת נרות", shabbatTimes.candles?.time, "flame.fill");
     addSpecialRow("הבדלה", shabbatTimes.havdalah?.time, "moon.stars.fill");
   }
 }
+} 
+
+
 
     
 
