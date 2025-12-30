@@ -306,7 +306,7 @@ titleStack.layoutHorizontally();
 titleStack.centerAlignContent();
 titleStack.addSpacer();
 
-const title = titleStack.addText("בטמית בפמיר");
+const title = titleStack.addText("תחבורה ציבורית");
 title.font = Font.boldSystemFont(20);
 title.textColor = new Color("#2C3E50");
 
