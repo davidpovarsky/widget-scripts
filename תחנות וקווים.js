@@ -170,7 +170,8 @@ out body;`;
       const gtfsId = tags?.["gtfs:stop_id:IL-MO"] ? String(tags["gtfs:stop_id:IL-MO"]) : "";
       const osmNodeId = el?.id != null ? String(el.id) : "";
 
-      const stopId = code || gtfsId || osmNodeId;
+// ✅ Prefer GTFS stop id for BusNearby stop link
+const stopId = gtfsId || osmNodeId;
       if (!stopId) continue;
 
       if (excludeIdsSet && excludeIdsSet.has(stopId)) continue;
