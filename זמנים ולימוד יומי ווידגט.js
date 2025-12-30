@@ -682,11 +682,6 @@ async function buildZmanimTable(parent, zmanimToday, zmanimTomorrow, hebrewDateT
   }
 
 // הוספת שורת שבת// ✅ הוספת "זמנים מיוחדים" (שבת / צום) — עם כותרת דינמית ורק אם יש מה להציג
-const hasShabbatSpecial = !!(shabbatTimes && (shabbatTimes.candles || shabbatTimes.havdalah));
-const hasFastSpecial = !!(fastTimes && (
-  fastTimes.today?.begins || fastTimes.today?.ends ||
-  fastTimes.tomorrow?.begins || fastTimes.tomorrow?.ends
-));
 
 if (hasFastSpecial || hasShabbatSpecial) {
   const container = itemCounter < midpoint ? rightCol : leftCol;
